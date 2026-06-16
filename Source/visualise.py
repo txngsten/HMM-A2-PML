@@ -3,7 +3,7 @@
 # File: visualise.py
 # Date: 16-06-2026
 # Description: Generates the three key HMM figures for the A2 report.
-# Usage: python visualise.py   (run AFTER train_test_val.py has produced hmm_params.npz)
+# Usage: python visualise.py (run AFTER train_test_val.py has produced hmm_params.npz)
 
 """
 This file generates 3 figures to help interpret the HMM.
