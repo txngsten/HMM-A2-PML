@@ -1,30 +1,14 @@
-# Student Name: [Your Name]
+# Student Name: Oliver Wuttke
 # Student FAN: wutt0019
 # File: visualise.py
 # Date: 16-06-2026
-# Description: Generates the three key HMM figures for the A2 report/appendix.
+# Description: Generates the three key HMM figures for the A2 report.
 # Usage: python visualise.py   (run AFTER train_test_val.py has produced hmm_params.npz)
-# Licence: [Optional: e.g., MIT Licence]
 
 """
-Three figures, each tied to a specific claim in the report:
-
-  fig1_regime_timeline.png
-      XEJ close with the background shaded by decoded HMM state. Shows the
-      high-volatility state aligning with the 2020 oil shock - the visual
-      evidence that latent states are volatility regimes.
-
-  fig2_transition_matrix.png
-      Heatmap of the learned transition matrix. Shows regime persistence
-      (strong diagonal self-loops).
-
-  fig3_direction_mix.png
-      Next-day direction proportions within each state. Near-identical bars
-      across states = the regime carries little directional information
-      (the central finding).
-
+This file generates 3 figures to help interpret the HMM.
 Figures are saved as PNGs into ../Misc/ so they can be embedded in the report
-and the AI-usage appendix, and regenerated deterministically.
+and regenerated deterministically.
 """
 
 import os
@@ -66,12 +50,11 @@ plt.rcParams.update({
 })
 
 
+"""
+Reload params, rebuild decoded states for the full series.
+We reconstruct a GaussianHMM from the saved arrays.
+"""
 def rebuild_model_and_decode():
-    """Reload params, rebuild decoded states for the full series.
-
-    We reconstruct a GaussianHMM from the saved arrays rather than retraining,
-    so the figures reflect exactly the persisted model.
-    """
     p = np.load("hmm_params.npz", allow_pickle=True)
 
     model = GaussianHMM(n_components=int(p["n_states"]), covariance_type="full")
@@ -106,17 +89,21 @@ def rebuild_model_and_decode():
     return full, model, state_to_dir
 
 
+"""
+Map raw state ids -> rank by d_Oil spread.
+Ranking by oil-return spread makes the colour scheme meaningful 
+(calm -> turbulent) and stable across runs.
+"""
 def order_states_by_volatility(full):
-    """Map raw state ids -> rank by d_Oil spread (0 = calmest).
-
-    The HMM numbers states arbitrarily; ranking by oil-return spread makes the
-    colour scheme meaningful (calm -> turbulent) and stable across runs.
-    """
     spread = full.groupby("state")["d_Oil"].std()
     order = spread.sort_values().index.tolist()
     return {raw: rank for rank, raw in enumerate(order)}
 
-
+"""
+XEJ close with the background shaded by decoded HMM state. Shows the
+high-volatility state aligning with the 2020 oil shock, the visual
+evidence that latent states are volatility regimes.
+"""
 def fig_regime_timeline(full, rank_map):
     fig, ax = plt.subplots(figsize=(11, 4.2))
     dates = full["date"].to_numpy()
@@ -155,7 +142,10 @@ def fig_regime_timeline(full, rank_map):
     plt.close(fig)
     print(f"saved {out}")
 
-
+"""
+Heatmap of the learned transition matrix. Shows regime persistence,
+strong diagonal self-loops.
+"""
 def fig_transition_matrix(model, rank_map):
     # Reorder the matrix by volatility rank for a heatmap.
     order = sorted(range(N_STATES), key=lambda s: rank_map[s])
@@ -184,7 +174,11 @@ def fig_transition_matrix(model, rank_map):
     plt.close(fig)
     print(f"saved {out}")
 
-
+"""
+Next-day direction proportions within each state. Near-identical bars
+across states = the regime carries little directional information
+(the central finding).
+"""
 def fig_direction_mix(full, rank_map):
     # Next-day direction proportions within each ranked state, TRAIN-set only.
     start, end = TRAIN_RANGE
