@@ -1,6 +1,6 @@
 # Student Name: Oliver Wuttke
 # Student FAN: wutt0019
-# File: predict_next_day.py
+# File: probabilistic_model.py
 # Date: 16-06-2026
 # Description: One-off next-trading-day XEJ open prediction from a saved HMM (hmm_params.npz).
 # Usage: python predict_next_day.py (run AFTER train_test_val.py has produced hmm_params.npz)
