@@ -12,6 +12,11 @@ OIL_TICKER = "CL=F"
 GPR_INDEX_URL = "https://www.matteoiacoviello.com/gpr_files/data_gpr_export.xls"
 
 
+def signed_log1p(x):
+    x = np.asarray(x, dtype=float)
+    return np.sign(x) * np.log1p(np.abs(x))
+
+
 """
 Gets the GPR Index data from GPR_INDEX_URL read into a pandas dataframe.
 Gets only the month and GPR values from the dataframe.
@@ -86,11 +91,11 @@ Returned on the OIL market's own trading calendar.
 """
 def load_oil():
     df = download_yf_data(OIL_TICKER, START_DATE, END_DATE)
-    df = df["Close"].copy()
+    df = df[["Close"]].copy()
     df = df.rename(columns={"Close": "Oil_close"})
 
     # log(x + 1) transform on all price columns (matches A1 approach)
-    df["Oil_close"] = np.log1p(df["Oil_close"])
+    df["Oil_close"] = signed_log1p(df["Oil_close"])
     df = df.dropna(subset=["Oil_close"]).reset_index()
     df = df.rename(columns={"Date": "date"})
 
