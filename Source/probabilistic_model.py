@@ -267,7 +267,7 @@ def main():
 
     top = soft_prob.max()
     if top < 0.45:
-        print("\nNote: probabilities are close to even - the model expresses low "
+        print("\nNote: probabilities are close to even, the model expresses low "
               "confidence, consistent with next-day direction being near-random "
               "for this target.")
 
