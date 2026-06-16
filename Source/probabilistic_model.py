@@ -8,41 +8,26 @@
 """
 One-off inference: predict the NEXT TRADING DAY's XEJ open direction.
 
-Inputs
-------
-- Frozen model parameters from hmm_params.npz (transition matrix, emissions,
-  scaler, winsor bounds, state->direction mapping) produced by train_test_val.py.
-- The single most recent observation only: current GPR, last oil close, last
-  XEJ close. No long history is used.
+Inputs:
+Frozen model parameters from hmm_params.npz (transition matrix, emissions,
+scaler, winsor bounds, state->direction mapping) produced by train_test_val.py.
+The single most recent observation only: current GPR, last oil close, last
+XEJ close.
 
-Trading calendar
-----------------
+Trading calendar:
 The data getters operate on the XEJ trading calendar (yfinance returns only
-trading days), so "the most recent day" is the most recent TRADING day and
-"next day" is the next TRADING day automatically. If the latest data is a
+trading days), so the most recent day is the most recent TRADING day and
+next day is the next TRADING day automatically. If the latest data is a
 Friday, the prediction is for Monday's open; if Monday is a public holiday, the
-next available row is Tuesday. No weekend/holiday arithmetic is required - and
-adding any would break the model's assumption of consecutive *trading* rows.
-The predicted-for date is reported as "next trading day after <latest date>".
+next available row is Tuesday.
 
-Method (and its honest limitation)
-----------------------------------
+Method and its limitation:
 Observations are DIFFERENCES (d_GPR, d_Oil, d_Close), so forming today's
 observation needs today's value AND the prior trading day's value. We therefore
 read the last two rows to compute the diff, but the prediction itself uses only
 the most recent day's observation vector.
 
-With a single observation there is no sequence to filter over, so the state
-belief is startprob x emission(obs), normalised - i.e. a one-step Bayesian
-classification of which regime today resembles, then projected one step ahead
-through the transition matrix to a next-day direction distribution. This is a
-deliberately self-contained predictor; it is NOT a full sequential decode and
-leans on the emission probabilities rather than sequence context. (Given the
-project finding that regimes carry little directional information, this does
-not change the outcome, but it is stated for transparency.)
-
-Output
-------
+Output:
 Both the hard label (argmax direction) and the calibrated probability
 distribution over {down, flat, up}, so the report can show the point prediction
 alongside honestly-quantified uncertainty.
@@ -58,21 +43,19 @@ from Source.etl_helpers import (
     XEJ_TICKER, OIL_TICKER,
 )
 
-
 PARAMS_PATH = "hmm_params.npz"
-
-# Must match training. Kept local so this file runs without importing training.
 OBS_COLS = ["d_GPR", "d_Oil", "d_Close"]
 DIRECTIONS = ["down", "flat", "up"]
 
-# How many recent calendar days to pull. ~25 calendar days comfortably covers
-# the ~10 trading rows needed for clean diffs and a month-boundary GPR change,
+# How many recent calendar days to pull. 25 calendar days comfortably covers
+# the 10 trading rows needed for clean diffs and a month-boundary GPR change,
 # while staying far smaller than the full 2018+ history.
 TAIL_DAYS = 25
 
-
+"""
+Load frozen HMM parameters.
+"""
 def load_params(path=PARAMS_PATH):
-    """Load frozen HMM parameters and preprocessing artefacts."""
     p = np.load(path, allow_pickle=True)
     params = {
         "transmat": p["transmat"],
@@ -86,23 +69,22 @@ def load_params(path=PARAMS_PATH):
         "state_to_dir": p["state_to_dir"],
         "n_states": int(p["n_states"]),
     }
-    # Optional: calibrated soft mapping, if training saved it.
+    # Calibrated soft mapping, if training saved it
     params["state_mix"] = p["state_mix"] if "state_mix" in p.files else None
     return params
 
+"""
+Build the most recent day's differenced observation from a SHORT tail.
+Fetches only the last TAIL_DAYS of XEJ and oil (one small yfinance call
+each) rather than the full training history, the frozen model needs no
+history, only today's differenced observation. A short tail (not just two
+rows) is fetched to guarantee clean diffs across ASX/oil holiday mismatches
+and to capture the month-over-month GPR change.
 
+Returns (obs_vector, latest_date) where obs_vector = [d_GPR, d_Oil, d_Close]
+for the most recent trading day.
+"""
 def latest_observation():
-    """Build the most recent day's differenced observation from a SHORT tail.
-
-    Fetches only the last ~TAIL_DAYS of XEJ and oil (one small yfinance call
-    each) rather than the full training history - the frozen model needs no
-    history, only today's differenced observation. A short tail (not just two
-    rows) is fetched to guarantee clean diffs across ASX/oil holiday mismatches
-    and to capture the month-over-month GPR change.
-
-    Returns (obs_vector, latest_date) where obs_vector = [d_GPR, d_Oil, d_Close]
-    for the most recent trading day.
-    """
     today = dt.date.today()
     start = (today - dt.timedelta(days=TAIL_DAYS)).isoformat()
     end = (today + dt.timedelta(days=1)).isoformat()
@@ -113,7 +95,7 @@ def latest_observation():
     xej = xej.rename(columns={"Close": "xej_close"}).reset_index()
     xej = xej.rename(columns={"Date": "date"})
 
-    # Oil tail. signed_log1p mirrors training (handles any negative print).
+    # Oil tail. signed_log1p mirrors training (handles any negative values).
     oil = download_yf_data(OIL_TICKER, start, end)[["Close"]].copy()
     oil["Close"] = signed_log1p(oil["Close"])
     oil = oil.rename(columns={"Close": "oil_close"}).reset_index()
@@ -131,18 +113,18 @@ def latest_observation():
             "increase TAIL_DAYS or check the data source."
         )
 
-    # Daily log-returns (diffs of logged series).
+    # Daily log-returns
     df["d_Oil"] = df["oil_close"].diff()
     df["d_Close"] = df["xej_close"].diff()
 
-    # GPR month-over-month change for the latest day's month.
+    # GPR month-over-month change for the latest day's month
     gpr = load_gpr().copy()
     gpr["ym"] = gpr["month"].dt.to_period("M")
     monthly_change = gpr.set_index("ym")["GPR_log"].sort_index().diff()
     latest_ym = df["date"].iloc[-1].to_period("M")
     d_gpr = monthly_change.get(latest_ym, np.nan)
     if pd.isna(d_gpr):
-        # GPR for the current month may not be published yet; fall back to the
+        # GPR for the current month may not be published yet, fall back to the
         # most recent available month-change so the feature stays defined.
         d_gpr = float(monthly_change.dropna().iloc[-1])
 
@@ -154,38 +136,33 @@ def latest_observation():
 
     return obs, last["date"]
 
-
+"""
+Log N(x | mean, cov) for one observation vector.
+"""
 def gaussian_log_likelihood(x, mean, cov):
-    """Log N(x | mean, cov) for one observation vector (full covariance)."""
     d = x.shape[0]
     diff = x - mean
     sign, logdet = np.linalg.slogdet(cov)
     inv = np.linalg.inv(cov)
     return -0.5 * (d * np.log(2 * np.pi) + logdet + diff @ inv @ diff)
 
-
+"""
+Predict next-trading-day direction from a single observation.
+Steps:
+    1. winsorise with saved bounds
+    2. standardise with saved scaler
+    3. emission likelihood per state -> belief = startprob x emission, norm.
+    4. project one step: next_state = belief @ transmat
+    5. map next-state probs to a direction distribution
+"""
 def predict(params, obs_raw, calibrated_mix=None):
-    """Predict next-trading-day direction from a single observation.
-
-    Steps (replicating the training data contract):
-      1. winsorise with saved bounds
-      2. standardise with saved scaler
-      3. emission likelihood per state -> belief = startprob x emission, norm.
-      4. project one step: next_state = belief @ transmat
-      5. map next-state probs to a direction distribution
-
-    If calibrated_mix is provided (n_states x 3 empirical direction proportions
-    per state), the mapping is SOFT - each state contributes its empirical
-    up/flat/down mix. Otherwise a HARD mapping is used (all mass to the state's
-    argmax direction), which is overconfident. Both are returned by main().
-    """
     n_states = params["n_states"]
 
-    # 1-2: winsorise then standardise.
+    # Winsorise then standardise.
     clipped = np.clip(obs_raw, params["winsor_lo"], params["winsor_hi"])
     x = (clipped - params["scaler_mean"]) / params["scaler_std"]
 
-    # 3: emission log-likelihood per state, combine with start prior.
+    # Emission log-likelihood per state, combine with start prior.
     log_em = np.array([
         gaussian_log_likelihood(x, params["means"][s], params["covars"][s])
         for s in range(n_states)
@@ -195,10 +172,10 @@ def predict(params, obs_raw, calibrated_mix=None):
     belief = np.exp(log_belief)
     belief /= belief.sum()
 
-    # 4: one-step projection through the transition matrix.
+    # One-step projection through the transition matrix.
     next_state = belief @ params["transmat"]
 
-    # 5: state -> direction distribution.
+    # State -> direction distribution.
     dir_prob = np.zeros(3)
     if calibrated_mix is not None:
         # Soft: each state contributes its empirical direction mix.
@@ -212,19 +189,19 @@ def predict(params, obs_raw, calibrated_mix=None):
 
     return belief, next_state, dir_prob
 
+"""
+Per-state empirical next-day direction mix (the calibrated soft mapping).
+NOTE ON HISTORY: this re-decodes the TRAIN period to recover each state's
+up/flat/down proportions, so it DOES read historical data, unlike the
+prediction itself, which needs only the latest observation. The mix is a
+fixed property of the trained model, so the clean design is to save it into
+hmm_params.npz during training and load it here instead of recomputing. 
+Until then this recomputes it.
 
+If you only need the hard label, skip this entirely (pass calibrated_mix
+=None to predict()), and no history is touched.
+"""
 def empirical_state_mix(params):
-    """Per-state empirical next-day direction mix (the calibrated soft mapping).
-
-    NOTE ON HISTORY: this re-decodes the TRAIN period to recover each state's
-    up/flat/down proportions, so it DOES read historical data - unlike the
-    prediction itself, which needs only the latest observation. The mix is a
-    fixed property of the trained model, so the clean design is to save it into
-    hmm_params.npz during training (add `state_mix=mix` to the np.savez call)
-    and load it here instead of recomputing. Until then this recomputes it.
-    If you only need the hard label, skip this entirely (pass calibrated_mix
-    =None to predict()), and no history is touched.
-    """
     if "state_mix" in params and params["state_mix"] is not None:
         return params["state_mix"]
 
@@ -288,7 +265,6 @@ def main():
         bar = "#" * int(round(soft_prob[d] * 30))
         print(f"    {name:>4}: {soft_prob[d]:.3f}  {bar}")
 
-    # Honest caveat in the output itself.
     top = soft_prob.max()
     if top < 0.45:
         print("\nNote: probabilities are close to even - the model expresses low "
