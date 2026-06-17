@@ -38,7 +38,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 
-from Source.etl_helpers import (
+from etl_helpers import (
     download_yf_data, load_gpr, signed_log1p,
     XEJ_TICKER, OIL_TICKER,
 )

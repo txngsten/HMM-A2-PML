@@ -47,7 +47,7 @@ import numpy as np
 import pandas as pd
 from hmmlearn.hmm import GaussianHMM
 
-from Source.etl_helpers import build_datasets, load_gpr
+from etl_helpers import build_datasets, load_gpr
 
 RANDOM_SEED = 42
 np.random.seed(RANDOM_SEED)

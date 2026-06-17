@@ -18,7 +18,7 @@ from hmmlearn.hmm import GaussianHMM
 from matplotlib.colors import LinearSegmentedColormap
 
 # Reuse the exact assembly + scaling from training so figures match the model
-from Source.train_test_val import (
+from train_test_val import (
     assemble_feature_matrix, add_direction_label, apply_scaler,
     OBS_COLS, DIRECTIONS, N_STATES, TRAIN_RANGE,
 )
