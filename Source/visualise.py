@@ -1,7 +1,7 @@
 # Student Name: Oliver Wuttke
 # Student FAN: wutt0019
 # File: visualise.py
-# Date: 16-06-2026
+# Date: 14-06-2026
 # Description: Generates the three key HMM figures for the A2 report.
 # Usage: python visualise.py (run AFTER train_test_val.py has produced hmm_params.npz)
 

@@ -1,7 +1,7 @@
 # Student Name: Oliver Wuttke
 # Student FAN: wutt0019
 # File: etl_helpers.py
-# Date: 16-06-2026
+# Date: 12-06-2026
 # Description: Provides a bunch of helper functions for retrieving needed data.
 
 import pandas as pd

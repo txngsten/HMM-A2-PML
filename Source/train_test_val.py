@@ -1,7 +1,7 @@
 # Student Name: Oliver Wuttke
 # Student FAN: wutt0019
 # File: train_test_val.py
-# Date: 16-06-2026
+# Date: 14-06-2026
 # Description: 3-state GaussianHMM (hmmlearn) on DIFFERENCED observations for XEJ next-day open regime.
 # Usage: python train_test_val.py
 
