@@ -6,7 +6,7 @@ These steps all assume you are currently in the `Source/` directory where this R
 ## Setup Python (3.14.5)
 Run this to install and activate the correct python version virtual environment (venv):
 ```bash
-python3.14.5 -m venv .venv
+python3.14 -m venv .venv
 source .venv/bin/activate
 ```
 Then we need to install our [requirements](requirements.txt) like so:
